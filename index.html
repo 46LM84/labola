@@ -1512,7 +1512,6 @@ async function syncWithGoogleSheets() {
             
             updateAllViews();
             debug('Data synced from Google Sheets', { count: bookings.length });
-        }
     } catch (error) {
         console.error('Sync error:', error);
         showError('Errore sincronizzazione con Google Sheets');
