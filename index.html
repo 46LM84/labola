@@ -1449,48 +1449,63 @@
             return true;
         }
         
-       // Sync with Google Sheets
+      // Sync with Google Sheets
 async function syncWithGoogleSheets() {
     if (!checkGoogleSheetsConfig()) return;
     
     try {
-        const response = await fetch(GOOGLE_SCRIPT_URL);
-        const result = await response.json();
+        // Usa JSONP per evitare problemi CORS
+        const script = document.createElement('script');
+        const callbackName = 'handleGoogleSheetsData_' + Date.now();
         
-        if (result.success) {
-            bookings = result.data.map(booking => {
-                // Ensure date is in YYYY-MM-DD format
-                let formattedDate = booking.date;
-                
-                // If date contains '/', convert to YYYY-MM-DD
-                if (formattedDate && formattedDate.includes('/')) {
-                    const parts = formattedDate.split('/');
-                    if (parts.length === 3) {
-                        // Assume DD/MM/YYYY format
-                        formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        window[callbackName] = function(result) {
+            if (result.success) {
+                bookings = result.data.map(booking => {
+                    // Ensure date is in YYYY-MM-DD format
+                    let formattedDate = booking.date;
+                    
+                    // If date contains '/', convert to YYYY-MM-DD
+                    if (formattedDate && formattedDate.includes('/')) {
+                        const parts = formattedDate.split('/');
+                        if (parts.length === 3) {
+                            // Assume DD/MM/YYYY format
+                            formattedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                        }
                     }
-                }
+                    
+                    return {
+                        ...booking,
+                        id: parseInt(booking.id) || booking.id,
+                        date: formattedDate,
+                        startTime: booking.startTime || '',
+                        endTime: booking.endTime || ''
+                    };
+                });
                 
-                // Ensure times are in HH:MM format
-                let startTime = booking.startTime;
-                let endTime = booking.endTime;
+                updateAllViews();
+                debug('Data synced from Google Sheets', { count: bookings.length });
                 
-                // If time is just a number (like "18:00" stored as "18"), fix it
-                if (startTime && !startTime.includes(':')) {
-                    startTime = startTime + ':00';
+                // Rimuovi il messaggio di errore se presente
+                const header = document.querySelector('.header');
+                const errorMsg = header.querySelector('.error-banner');
+                if (errorMsg) {
+                    errorMsg.remove();
                 }
-                if (endTime && !endTime.includes(':')) {
-                    endTime = endTime + ':00';
-                }
-                
-                return {
-                    ...booking,
-                    id: parseInt(booking.id) || booking.id,
-                    date: formattedDate,
-                    startTime: startTime,
-                    endTime: endTime
-                };
-            });
+            }
+            
+            // Cleanup
+            delete window[callbackName];
+            document.body.removeChild(script);
+        };
+        
+        script.src = `${GOOGLE_SCRIPT_URL}?callback=${callbackName}`;
+        document.body.appendChild(script);
+        
+    } catch (error) {
+        console.error('Sync error:', error);
+        showError('Errore sincronizzazione con Google Sheets');
+    }
+}
             
             console.log('Bookings synced:', bookings.length);
             console.log('Sample booking:', bookings[0]);
